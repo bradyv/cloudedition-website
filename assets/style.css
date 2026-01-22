@@ -25,6 +25,7 @@ html {
 body {
     font-family: var(--serif);
     background: var(--ink);
+    background-image: url(img/paper-dark@2x.png);
     color: var(--parchment);
     line-height: 1.7;
     font-size: 18px;
@@ -61,7 +62,7 @@ body::before {
 
 /* Header */
 header {
-    padding: 60px 0 40px;
+    padding: 60px 0 0;
     text-align: center;
     border-bottom: 3px double var(--rule);
     position: relative;
