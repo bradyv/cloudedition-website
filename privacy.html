@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Cloud Edition — Extraordinary Meteorological Dispatch</title>
+    <meta name="description" content="Accept no mere guesswork of the heavens. From The Maple Meteorological Society, The Cloud Edition serves the discerning gentleperson of the modern atmosphere.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400..700;1,400..700&family=Manufacturing+Consent&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/style.css">
+
+    <!-- Facebook Meta Tags -->
+    <meta property="og:url" content="https://thecloudedition.app/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="The Cloud Edition — Extraordinary Meteorological Dispatch">
+    <meta property="og:description" content="Accept no mere guesswork of the heavens. From The Maple Meteorological Society, The Cloud Edition serves the discerning gentleperson of the modern atmosphere.">
+    <meta property="og:image" content="https://thecloudedition.app/assets/img/og.png">
+
+    <!-- Twitter Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta property="twitter:domain" content="thecloudedition.app">
+    <meta property="twitter:url" content="https://thecloudedition.app/">
+    <meta name="twitter:title" content="The Cloud Edition — Extraordinary Meteorological Dispatch">
+    <meta name="twitter:description" content="Accept no mere guesswork of the heavens. From The Maple Meteorological Society, The Cloud Edition serves the discerning gentleperson of the modern atmosphere.">
+    <meta name="twitter:image" content="https://thecloudedition.app/assets/img/og.png">
+</head>
+<body>
+
+    <section class="features">
+        <div class="container">
+            <div class="section-header">
+                <div class="section-number">Last Updated Jan 23, 2026</div>
+                <h2 class="section-title">Privacy Policy</h2>
+                <div class="section-rule"></div>
+            </div>
+
+            <div class="privacy">
+                <div class="feature">
+                    <h3 class="feature-title">Information We Collect</h3>
+                    <p class="feature-text">The Cloud Edition does not collect or store any personally identifiable information. We do not track you, and we do not analyze your behavior in the app.</p>
+                    <br/><br/>
+                    <h3 class="feature-title">Your Rights</h3>
+                    <p class="feature-text">Because we do not collect or store any personal data ourselves, there is no data for us to modify or delete. However, you can manage your The Cloud Edition data through your Apple device settings.</p>
+                    <br/><br/>
+                    <h3 class="feature-title">Changes to This Policy</h3>
+                    <p class="feature-text">We may update this Privacy Policy from time to time. Changes will be posted here with the updated date.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <div class="footer-logo">The Cloud Edition</div>
+            <p class="footer-text">Extraordinary Meteorological Dispatch · Est. 2026</p>
+            <div class="footer-links">
+                <a href="privacy.html">Privacy</a>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Scroll animation observer
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        });
+
+        document.querySelectorAll('.animate-on-scroll').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
+</body>
+</html>
