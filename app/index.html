@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>The Cloud Edition</title>
+  <meta name="description" content="A Victorian newspaper-style weather forecast">
+  <meta name="theme-color" content="#f5f1e8">
+  
+  <!-- Favicon (optional - add your own) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="The Cloud Edition">
+  <meta property="og:description" content="A Victorian newspaper-style weather forecast">
+  <meta property="og:type" content="website">
+  
+  <style>
+    /* ========================================================================
+       FONT SETUP
+       Drop your ManufacturingConsent font files in assets/fonts/
+       ======================================================================== */
+    @font-face {
+      font-family: 'ManufacturingConsent';
+      src: url('./assets/fonts/ManufacturingConsent-Regular.woff2') format('woff2'),
+           url('./assets/fonts/ManufacturingConsent-Regular.woff') format('woff'),
+           url('./assets/fonts/ManufacturingConsent-Regular.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+    
+    /* ========================================================================
+       CSS RESET & BASE
+       ======================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    
+    * {
+      margin: 0;
+    }
+    
+    html {
+      -webkit-text-size-adjust: 100%;
+    }
+    
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    
+    img, svg {
+      display: block;
+      max-width: 100%;
+    }
+    
+    button {
+      font: inherit;
+    }
+    
+    #root {
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+    
+    /* Hide scrollbar but allow scrolling */
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+  
+  <!-- React -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel" data-type="module">
+// ============================================================================
+// PROVIDER INTERFACES & IMPLEMENTATIONS
+// ============================================================================
+
+// --- Weather Provider Interface ---
+const WeatherProviderType = {
+  OPEN_METEO: 'open-meteo',
+  // Add more providers here:
+  // OPENWEATHERMAP: 'openweathermap',
+  // WEATHERKIT_PROXY: 'weatherkit-proxy',
+};
+
+// Normalized weather data structure (provider-agnostic)
+const createWeatherData = () => ({
+  current: {
+    temp: 0,
+    feelsLike: 0,
+    humidity: 0,
+    wind: 0,
+    condition: '',
+    conditionCode: 0,
+  },
+  daily: [],
+  hourly: [],
+  alerts: [],
+});
+
+// Open-Meteo Implementation
+const OpenMeteoProvider = {
+  async fetchWeather(lat, lon) {
+    const params = new URLSearchParams({
+      latitude: lat,
+      longitude: lon,
+      current: 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m',
+      hourly: 'temperature_2m,weather_code',
+      daily: 'weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset',
+      timezone: 'auto',
+      forecast_days: 8,
+    });
+
+    const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+    if (!response.ok) throw new Error('Weather fetch failed');
+    const data = await response.json();
+    return this.normalize(data);
+  },
+
+  normalize(data) {
+    const weather = createWeatherData();
+
+    weather.current = {
+      temp: Math.round(data.current.temperature_2m),
+      feelsLike: Math.round(data.current.apparent_temperature),
+      humidity: Math.round(data.current.relative_humidity_2m),
+      wind: Math.round(data.current.wind_speed_10m),
+      condition: this.codeToCondition(data.current.weather_code),
+      conditionCode: data.current.weather_code,
+    };
+
+    weather.daily = data.daily.time.map((date, i) => ({
+      date: new Date(date),
+      high: Math.round(data.daily.temperature_2m_max[i]),
+      low: Math.round(data.daily.temperature_2m_min[i]),
+      condition: this.codeToCondition(data.daily.weather_code[i]),
+      conditionCode: data.daily.weather_code[i],
+      sunrise: data.daily.sunrise[i],
+      sunset: data.daily.sunset[i],
+    }));
+
+    const now = new Date();
+    weather.hourly = data.hourly.time
+      .map((time, i) => ({
+        date: new Date(time),
+        temp: Math.round(data.hourly.temperature_2m[i]),
+        condition: this.codeToCondition(data.hourly.weather_code[i]),
+      }))
+      .filter(h => h.date > now)
+      .slice(0, 24);
+
+    return weather;
+  },
+
+  codeToCondition(code) {
+    const conditions = {
+      0: 'Clear', 1: 'Mostly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
+      45: 'Foggy', 48: 'Foggy',
+      51: 'Light Drizzle', 53: 'Drizzle', 55: 'Heavy Drizzle',
+      56: 'Freezing Drizzle', 57: 'Freezing Drizzle',
+      61: 'Light Rain', 63: 'Rain', 65: 'Heavy Rain',
+      66: 'Freezing Rain', 67: 'Freezing Rain',
+      71: 'Light Snow', 73: 'Snow', 75: 'Heavy Snow', 77: 'Snow Grains',
+      80: 'Rain Showers', 81: 'Rain Showers', 82: 'Heavy Showers',
+      85: 'Snow Showers', 86: 'Heavy Snow Showers',
+      95: 'Thunderstorm', 96: 'Thunderstorm with Hail', 99: 'Thunderstorm with Hail',
+    };
+    return conditions[code] || 'Unknown';
+  },
+};
+
+function getWeatherProvider(type = WeatherProviderType.OPEN_METEO) {
+  switch (type) {
+    case WeatherProviderType.OPEN_METEO:
+    default:
+      return OpenMeteoProvider;
+  }
+}
+
+// --- AI Summary Provider Interface ---
+const AIProviderType = {
+  DETERMINISTIC: 'deterministic',
+  CLAUDE: 'claude',
+};
+
+// Deterministic Implementation (template-based)
+const DeterministicAIProvider = {
+  async generateSummary(ctx) {
+    const { condition, timeOfDay, hourlyPreview } = ctx;
+    const c = condition.toLowerCase();
+    
+    const greetings = {
+      morning: ['The morning greets us with', 'Dawn brings', 'Early hours present'],
+      afternoon: ['The afternoon continues with', 'Midday presents', 'The day progresses with'],
+      evening: ['Evening descends with', 'The twilight hours bring', 'As dusk approaches,'],
+      night: ['The night settles in with', 'Nocturnal hours present', 'The late hours bring'],
+    };
+    
+    const greeting = greetings[timeOfDay][Math.floor(Math.random() * 3)];
+    
+    let desc = 'variable conditions';
+    if (c.includes('clear') || c.includes('sunny')) desc = 'clear skies and fair conditions';
+    else if (c.includes('cloud') && c.includes('part')) desc = 'a mix of sun and clouds';
+    else if (c.includes('cloud') || c.includes('overcast')) desc = 'overcast skies';
+    else if (c.includes('rain') || c.includes('drizzle') || c.includes('shower')) desc = 'wet conditions and grey skies';
+    else if (c.includes('snow')) desc = 'wintry precipitation';
+    else if (c.includes('thunder')) desc = 'stormy conditions';
+    else if (c.includes('fog')) desc = 'misty, low-visibility conditions';
+    
+    let preview = '';
+    if (hourlyPreview?.willChange) {
+      preview = ` Expect ${hourlyPreview.upcoming} later.`;
+    }
+    
+    return `${greeting} ${desc}.${preview}`;
+  },
+
+  async generateTagline(placeName) {
+    const city = placeName.split(',')[0].trim();
+    return `Printed at ${city}`;
+  },
+};
+
+// Claude API Implementation (ready to enable)
+const ClaudeAIProvider = {
+  async generateSummary(ctx) {
+    const { condition, temp, feelsLike, humidity, wind, high, low, timeOfDay, hourlyPreview } = ctx;
+    
+    const prompt = `It's currently ${timeOfDay}. Current weather: ${temp}°C (feels like ${feelsLike}°C), ${condition.toLowerCase()}, humidity ${humidity}%, wind ${wind} km/h. Today's high ${high}°, low ${low}°. ${hourlyPreview?.summary || ''}
+
+Write a brief, friendly one-sentence weather summary appropriate for this time of day. Exclude the current & feels like temperatures, the humidity, and the wind. Use an upcoming preview if relevant.`;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      const data = await response.json();
+      return data.content?.[0]?.text || DeterministicAIProvider.generateSummary(ctx);
+    } catch {
+      return DeterministicAIProvider.generateSummary(ctx);
+    }
+  },
+
+  async generateTagline(placeName) {
+    const prompt = `Generate a Victorian newspaper-style location tagline for ${placeName}. Follow the pattern "Printed at [location description]" using a geographically accurate and poetic descriptor. Examples: "Printed at Surrey upon the Fraser", "Printed at Denver beneath the Rockies". Use real geographic features. Keep it under 8 words. Output only the tagline.`;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      const data = await response.json();
+      return data.content?.[0]?.text?.trim() || `Printed at ${placeName}`;
+    } catch {
+      return `Printed at ${placeName}`;
+    }
+  },
+};
+
+function getAIProvider(type = AIProviderType.DETERMINISTIC) {
+  switch (type) {
+    case AIProviderType.CLAUDE:
+      return ClaudeAIProvider;
+    case AIProviderType.DETERMINISTIC:
+    default:
+      return DeterministicAIProvider;
+  }
+}
+
+// ============================================================================
+// CONFIGURATION - Change providers here
+// ============================================================================
+
+const WEATHER_PROVIDER = WeatherProviderType.OPEN_METEO;
+const AI_PROVIDER = AIProviderType.DETERMINISTIC;
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+function getTimeOfDay() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'morning';
+  if (hour >= 12 && hour < 17) return 'afternoon';
+  if (hour >= 17 && hour < 21) return 'evening';
+  return 'night';
+}
+
+function formatDate(date) {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+}
+
+function formatWeekday(date) {
+  return date.toLocaleDateString('en-US', { weekday: 'long' });
+}
+
+function formatTime(isoString) {
+  if (!isoString) return '-';
+  return new Date(isoString).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+}
+
+function getDayOfYear() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const diff = now - start;
+  return String(Math.floor(diff / (1000 * 60 * 60 * 24))).padStart(3, '0');
+}
+
+function getMoonPhase(date) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const c = Math.floor(365.25 * year);
+  const e = Math.floor(30.6 * month);
+  const jd = c + e + day - 694039.09;
+  const phase = jd / 29.53058867;
+  const phaseIndex = Math.floor((phase - Math.floor(phase)) * 8);
+  
+  const phases = [
+    { name: 'New', icon: '🌑' }, { name: 'Waxing', icon: '🌒' },
+    { name: 'Quarter', icon: '🌓' }, { name: 'Waxing', icon: '🌔' },
+    { name: 'Full', icon: '🌕' }, { name: 'Waning', icon: '🌖' },
+    { name: 'Quarter', icon: '🌗' }, { name: 'Waning', icon: '🌘' },
+  ];
+  return phases[phaseIndex];
+}
+
+function getConditionIcon(condition) {
+  const c = condition.toLowerCase();
+  if (c.includes('thunder')) return '⛈';
+  if (c.includes('rain') || c.includes('drizzle') || c.includes('shower')) return '🌧';
+  if (c.includes('snow')) return '❄';
+  if (c.includes('fog')) return '🌫';
+  if (c.includes('cloud') && c.includes('part')) return '⛅';
+  if (c.includes('cloud') || c.includes('overcast')) return '☁';
+  return '☀';
+}
+
+function getHeroIcon(condition) {
+  const c = condition.toLowerCase();
+  if (c.includes('thunder')) return 'Thunder';
+  if (c.includes('rain') || c.includes('drizzle') || c.includes('shower')) return 'Rain';
+  if (c.includes('snow')) return 'Snow';
+  if (c.includes('fog')) return 'Fog';
+  if (c.includes('cloud') && (c.includes('part') || c.includes('most'))) return 'PartlyCloud';
+  if (c.includes('cloud') || c.includes('overcast')) return 'Cloudy';
+  return 'Clear';
+}
+
+// ============================================================================
+// SVG WEATHER ICONS
+// ============================================================================
+
+const WeatherIcons = {
+  Clear: () => (
+    <svg viewBox="0 0 100 100" fill="currentColor">
+      <circle cx="50" cy="50" r="20" fill="none" stroke="currentColor" strokeWidth="2"/>
+      {[...Array(12)].map((_, i) => (
+        <line key={i}
+          x1={50 + 28 * Math.cos(i * 30 * Math.PI / 180)}
+          y1={50 + 28 * Math.sin(i * 30 * Math.PI / 180)}
+          x2={50 + 38 * Math.cos(i * 30 * Math.PI / 180)}
+          y2={50 + 38 * Math.sin(i * 30 * Math.PI / 180)}
+          stroke="currentColor" strokeWidth="2"
+        />
+      ))}
+    </svg>
+  ),
+  PartlyCloud: () => (
+    <svg viewBox="0 0 100 100" fill="currentColor">
+      <circle cx="35" cy="35" r="15" fill="none" stroke="currentColor" strokeWidth="2"/>
+      {[...Array(8)].map((_, i) => (
+        <line key={i}
+          x1={35 + 20 * Math.cos(i * 45 * Math.PI / 180)}
+          y1={35 + 20 * Math.sin(i * 45 * Math.PI / 180)}
+          x2={35 + 26 * Math.cos(i * 45 * Math.PI / 180)}
+          y2={35 + 26 * Math.sin(i * 45 * Math.PI / 180)}
+          stroke="currentColor" strokeWidth="2"
+        />
+      ))}
+      <ellipse cx="60" cy="60" rx="25" ry="15" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="45" cy="55" rx="15" ry="12" fill="none" stroke="currentColor" strokeWidth="2"/>
+    </svg>
+  ),
+  Cloudy: () => (
+    <svg viewBox="0 0 100 100" fill="currentColor">
+      <ellipse cx="50" cy="55" rx="30" ry="18" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="35" cy="50" rx="18" ry="14" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="65" cy="50" rx="18" ry="14" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="50" cy="42" rx="15" ry="12" fill="none" stroke="currentColor" strokeWidth="2"/>
+    </svg>
+  ),
+  Rain: () => (
+    <svg viewBox="0 0 100 100" fill="currentColor">
+      <ellipse cx="50" cy="35" rx="28" ry="16" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="35" cy="32" rx="15" ry="12" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="65" cy="32" rx="15" ry="12" fill="none" stroke="currentColor" strokeWidth="2"/>
+      {[30, 45, 60, 75].map((x, i) => (
+        <line key={i} x1={x} y1="55" x2={x - 5} y2="70" stroke="currentColor" strokeWidth="2"/>
+      ))}
+      {[37, 52, 67].map((x, i) => (
+        <line key={`b${i}`} x1={x} y1="65" x2={x - 5} y2="80" stroke="currentColor" strokeWidth="2"/>
+      ))}
+    </svg>
+  ),
+  Snow: () => (
+    <svg viewBox="0 0 100 100" fill="currentColor">
+      <ellipse cx="50" cy="30" rx="28" ry="16" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="35" cy="27" rx="15" ry="12" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="65" cy="27" rx="15" ry="12" fill="none" stroke="currentColor" strokeWidth="2"/>
+      {[[35, 55], [50, 60], [65, 55], [42, 72], [58, 72], [50, 82]].map(([x, y], i) => (
+        <text key={i} x={x} y={y} fontSize="10" textAnchor="middle">✻</text>
+      ))}
+    </svg>
+  ),
+  Thunder: () => (
+    <svg viewBox="0 0 100 100" fill="currentColor">
+      <ellipse cx="50" cy="30" rx="28" ry="16" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="35" cy="27" rx="15" ry="12" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <ellipse cx="65" cy="27" rx="15" ry="12" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <polygon points="55,45 45,62 52,62 42,82 60,58 52,58 60,45" fill="currentColor"/>
+    </svg>
+  ),
+  Fog: () => (
+    <svg viewBox="0 0 100 100" fill="currentColor">
+      {[30, 45, 60, 75].map((y, i) => (
+        <line key={i} x1="20" y1={y} x2="80" y2={y} stroke="currentColor" strokeWidth="2" strokeDasharray={i % 2 ? "8,4" : "12,4"}/>
+      ))}
+    </svg>
+  ),
+  Mountain: () => (
+    <svg viewBox="0 0 100 100" fill="currentColor">
+      <polygon points="50,20 80,80 20,80" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <polygon points="50,20 60,40 40,40" fill="none" stroke="currentColor" strokeWidth="1"/>
+      <line x1="30" y1="60" x2="70" y2="60" stroke="currentColor" strokeWidth="1" strokeDasharray="4,2"/>
+    </svg>
+  ),
+  WintryMix: () => (
+    <svg viewBox="0 0 100 100" fill="currentColor">
+      <ellipse cx="50" cy="30" rx="28" ry="16" fill="none" stroke="currentColor" strokeWidth="2"/>
+      <line x1="30" y1="50" x2="25" y2="65" stroke="currentColor" strokeWidth="2"/>
+      <line x1="45" y1="50" x2="40" y2="65" stroke="currentColor" strokeWidth="2"/>
+      <text x="60" y="62" fontSize="10" textAnchor="middle">✻</text>
+      <text x="75" y="72" fontSize="10" textAnchor="middle">✻</text>
+    </svg>
+  ),
+};
+
+// ============================================================================
+// STYLES
+// ============================================================================
+
+const styles = {
+  titleLarge: {
+    fontFamily: '"ManufacturingConsent", Georgia, serif',
+    fontSize: '36px',
+    color: 'var(--text-color)',
+    margin: 0,
+    lineHeight: 1.1,
+  },
+  titleSerif: {
+    fontFamily: 'Georgia, serif',
+    fontSize: '24px',
+    fontWeight: 'normal',
+    color: 'var(--text-color)',
+    margin: 0,
+  },
+  headline: {
+    fontFamily: '"ManufacturingConsent", Georgia, serif',
+    fontSize: '24px',
+    color: 'var(--text-color)',
+    margin: 0,
+  },
+  body: {
+    fontFamily: 'Georgia, serif',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: 'var(--text-color)',
+    margin: 0,
+  },
+  callout: {
+    fontFamily: 'Georgia, serif',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: 'var(--text-color)',
+    margin: 0,
+  },
+  caption: {
+    fontFamily: 'Georgia, serif',
+    fontSize: '10px',
+    fontWeight: 'normal',
+    color: 'var(--text-color)',
+    textTransform: 'uppercase',
+    letterSpacing: '1.5px',
+    margin: 0,
+  },
+  temperature: {
+    fontFamily: 'Georgia, serif',
+    fontSize: 'min(128px, 25vw)',
+    fontWeight: 900,
+    color: 'var(--text-color)',
+    lineHeight: 1,
+    margin: 0,
+  },
+};
+
+const etchedCornerPath = (cut = 10) => `polygon(${cut}px 0, calc(100% - ${cut}px) 0, 100% ${cut}px, 100% calc(100% - ${cut}px), calc(100% - ${cut}px) 100%, ${cut}px 100%, 0 calc(100% - ${cut}px), 0 ${cut}px)`;
+
+// ============================================================================
+// COMPONENTS
+// ============================================================================
+
+const Separator = () => <div style={{ height: '1px', background: 'var(--text-color)', width: '100%' }} />;
+const SeparatorLarge = () => <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', width: '100%' }}><Separator /><Separator /></div>;
+const SeparatorBold = () => <div style={{ height: '3px', background: 'var(--text-color)', width: '100%' }} />;
+
+const LoadingView = () => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '16px', padding: '20px' }}>
+    <div style={{ width: '200px', color: 'var(--text-color)' }}><WeatherIcons.Mountain /></div>
+    <p style={{ ...styles.headline, textAlign: 'center' }}>Preparing today's atmospheric dispatch.</p>
+  </div>
+);
+
+const LocationDenied = () => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '16px', padding: '20px' }}>
+    <div style={{ width: '200px', color: 'var(--text-color)' }}><WeatherIcons.WintryMix /></div>
+    <p style={{ ...styles.headline, textAlign: 'center' }}>Unable to determine your locale.</p>
+    <button
+      onClick={() => alert('Please enable location access in your browser settings, then refresh the page.')}
+      style={{ background: 'var(--text-color)', color: 'var(--paper-color)', border: 'none', padding: '12px 24px', fontFamily: 'Georgia, serif', fontSize: '14px', cursor: 'pointer', clipPath: etchedCornerPath(8) }}
+    >
+      Enable Location
+    </button>
+  </div>
+);
+
+const Header = ({ placeName, reportDate, reportCount, alerts, onAlertClick }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+    {alerts.length > 0 && alerts.map((alert, i) => (
+      <button key={i} onClick={() => onAlertClick(alert.detailsURL)} style={{ background: '#c44', color: 'white', border: 'none', padding: '8px', width: '100%', cursor: 'pointer', ...styles.caption }}>
+        {alert.summary}
+      </button>
+    ))}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px', paddingTop: alerts.length > 0 ? 0 : '8px' }}>
+      <span style={styles.caption}>Est. 2026</span>
+      <span style={styles.caption}>{placeName}</span>
+      <span style={styles.caption}>MMXXVI No. {reportCount}</span>
+    </div>
+    <h1 style={{ ...styles.titleLarge, textAlign: 'center' }}>The Cloud Edition</h1>
+    <p style={{ ...styles.caption, textAlign: 'center' }}>{reportDate}</p>
+  </div>
+);
+
+const Hero = ({ temp, condition, summary }) => {
+  const IconComponent = WeatherIcons[getHeroIcon(condition)] || WeatherIcons.Clear;
+  return (
+    <div style={{ padding: '0 16px', textAlign: 'center' }}>
+      <p style={styles.headline}>Current Atmospheric Conditions</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '18px', margin: '8px 0' }}>
+        <span style={styles.temperature}>{temp}°</span>
+        <div style={{ width: 'min(120px, 25vw)', height: 'min(120px, 25vw)', color: 'var(--text-color)' }}><IconComponent /></div>
+      </div>
+      {summary && <p style={{ ...styles.body, textAlign: 'center', maxWidth: '400px', margin: '0 auto' }}>{summary}</p>}
+    </div>
+  );
+};
+
+const CurrentConditions = ({ feelsLike, humidity, wind }) => (
+  <div>
+    <SeparatorLarge />
+    <div style={{ display: 'flex', padding: '8px 0' }}>
+      <div style={{ flex: 1, textAlign: 'center' }}>
+        <p style={styles.caption}>Feels Like</p>
+        <p style={styles.titleSerif}>{feelsLike}°</p>
+      </div>
+      <div style={{ width: '1px', background: 'var(--text-color)' }} />
+      <div style={{ flex: 1, textAlign: 'center' }}>
+        <p style={styles.caption}>Humidity</p>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+          <span style={styles.titleSerif}>{humidity}</span>
+          <span style={{ ...styles.caption, paddingTop: '4px' }}>%</span>
+        </div>
+      </div>
+      <div style={{ width: '1px', background: 'var(--text-color)' }} />
+      <div style={{ flex: 1, textAlign: 'center' }}>
+        <p style={styles.caption}>Wind</p>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+          <span style={styles.titleSerif}>{wind}</span>
+          <span style={{ ...styles.caption, paddingTop: '4px' }}>km/h</span>
+        </div>
+      </div>
+    </div>
+    <SeparatorLarge />
+  </div>
+);
+
+const Almanac = ({ sunrise, sunset, moonrise, moonphase }) => (
+  <div style={{ padding: '8px 0' }}>
+    <p style={{ ...styles.headline, textAlign: 'center', marginBottom: '8px' }}>Celestial Almanac</p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex' }}>
+        <div style={{ flex: 1, textAlign: 'center' }}><p style={styles.caption}>Sunrise</p><p style={styles.titleSerif}>{sunrise}</p></div>
+        <div style={{ flex: 1, textAlign: 'center' }}><p style={styles.caption}>Sunset</p><p style={styles.titleSerif}>{sunset}</p></div>
+      </div>
+      <div style={{ display: 'flex' }}>
+        <div style={{ flex: 1, textAlign: 'center' }}><p style={styles.caption}>Moonrise</p><p style={styles.titleSerif}>{moonrise}</p></div>
+        <div style={{ flex: 1, textAlign: 'center' }}>
+          <p style={styles.caption}>Moonphase</p>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '19px' }}>{moonphase.icon}</span>
+            <span style={styles.titleSerif}>{moonphase.name}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style={{ marginTop: '8px' }}><SeparatorBold /></div>
+  </div>
+);
+
+const ExtendedForecast = ({ days }) => (
+  <div>
+    <p style={{ ...styles.headline, textAlign: 'center' }}>Weekly Prognostication</p>
+    <div style={{ marginTop: '10px' }}>
+      <div className="hide-scrollbar" style={{ display: 'flex', overflowX: 'auto', padding: '12px 8px', border: '1px solid var(--text-color)', gap: '2px' }}>
+        {days.map((day, i) => (
+          <div key={i} style={{ minWidth: '110px', textAlign: 'center', flexShrink: 0 }}>
+            <p style={styles.caption}>{formatWeekday(day.date)}</p>
+            <div style={{ fontSize: '24px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{getConditionIcon(day.condition)}</div>
+            <p style={styles.callout}>{day.condition}</p>
+            <p style={styles.callout}>{day.high}° / {day.low}°</p>
+          </div>
+        ))}
+      </div>
+    </div>
+    <SeparatorBold />
+  </div>
+);
+
+const Footer = ({ tagline }) => (
+  <div style={{ padding: '16px 0 32px', textAlign: 'center' }}>
+    <p style={styles.caption}>Compiled by the offices of the Maple Meteorological Society</p>
+    <p style={{ ...styles.caption, marginTop: '16px' }}>{tagline}</p>
+  </div>
+);
+
+// ============================================================================
+// MAIN APP
+// ============================================================================
+
+function CloudEdition() {
+  const [locationState, setLocationState] = React.useState('loading');
+  const [coords, setCoords] = React.useState(null);
+  const [placeName, setPlaceName] = React.useState('');
+  const [weather, setWeather] = React.useState(null);
+  const [summary, setSummary] = React.useState('');
+  const [tagline, setTagline] = React.useState('');
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState(null);
+
+  // Get location
+  React.useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationState('denied');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude }); setLocationState('granted'); },
+      () => { setLocationState('denied'); }
+    );
+  }, []);
+
+  // Reverse geocode
+  React.useEffect(() => {
+    if (!coords) return;
+    (async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${coords.lat}&lon=${coords.lon}&format=json`);
+        const data = await res.json();
+        const city = data.address?.city || data.address?.town || data.address?.village || 'Unknown';
+        const state = data.address?.state || data.address?.country || '';
+        setPlaceName(state ? `${city}, ${state}` : city);
+      } catch { setPlaceName('Unknown Location'); }
+    })();
+  }, [coords]);
+
+  // Fetch weather
+  const fetchWeather = React.useCallback(async () => {
+    if (!coords) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const weatherProvider = getWeatherProvider(WEATHER_PROVIDER);
+      const weatherData = await weatherProvider.fetchWeather(coords.lat, coords.lon);
+      setWeather(weatherData);
+
+      const aiProvider = getAIProvider(AI_PROVIDER);
+      const hourlyPreview = (() => {
+        const next12 = weatherData.hourly.slice(0, 12);
+        const conditions = [...new Set(next12.map(h => h.condition.toLowerCase()))];
+        const currentCondition = weatherData.current.condition.toLowerCase();
+        const willChange = conditions.some(c => c !== currentCondition);
+        return { willChange, upcoming: conditions.find(c => c !== currentCondition) || conditions[0], summary: `Next 12 hours: ${Math.min(...next12.map(h => h.temp))}°–${Math.max(...next12.map(h => h.temp))}°` };
+      })();
+
+      const summaryText = await aiProvider.generateSummary({
+        condition: weatherData.current.condition,
+        temp: weatherData.current.temp,
+        feelsLike: weatherData.current.feelsLike,
+        humidity: weatherData.current.humidity,
+        wind: weatherData.current.wind,
+        high: weatherData.daily[0]?.high,
+        low: weatherData.daily[0]?.low,
+        timeOfDay: getTimeOfDay(),
+        hourlyPreview,
+      });
+      setSummary(summaryText);
+    } catch (err) { setError(err.message); }
+    finally { setIsLoading(false); }
+  }, [coords]);
+
+  // Generate tagline
+  React.useEffect(() => {
+    if (!placeName) return;
+    (async () => {
+      const aiProvider = getAIProvider(AI_PROVIDER);
+      const tag = await aiProvider.generateTagline(placeName);
+      setTagline(tag);
+    })();
+  }, [placeName]);
+
+  React.useEffect(() => { fetchWeather(); }, [fetchWeather]);
+
+  const reportDate = formatDate(new Date());
+  const reportCount = getDayOfYear();
+  const moonphase = getMoonPhase(new Date());
+
+  const containerStyle = {
+    '--text-color': '#1a1a1a',
+    '--paper-color': '#f5f1e8',
+    minHeight: '100vh',
+    /* Paper texture - uncomment when you add your image: */
+    /* backgroundImage: 'url(./assets/images/paper.png)', */
+    /* backgroundRepeat: 'repeat', */
+    background: 'var(--paper-color)',
+  };
+
+  if (locationState === 'loading') return <div style={containerStyle}><LoadingView /></div>;
+  if (locationState === 'denied') return <div style={containerStyle}><LocationDenied /></div>;
+
+  return (
+    <div style={containerStyle}>
+      <div style={{ maxWidth: '500px', margin: '0 auto', padding: '8px' }}>
+        <div style={{ background: 'var(--paper-color)', clipPath: etchedCornerPath(10), border: '1px solid var(--text-color)' }}>
+          {isLoading ? <LoadingView /> : error ? (
+            <div style={{ padding: '40px', textAlign: 'center' }}>
+              <p style={styles.body}>{error}</p>
+              <button onClick={fetchWeather} style={{ marginTop: '16px', background: 'var(--text-color)', color: 'var(--paper-color)', border: 'none', padding: '12px 24px', cursor: 'pointer' }}>Retry</button>
+            </div>
+          ) : weather && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <Header placeName={placeName} reportDate={reportDate} reportCount={reportCount} alerts={weather.alerts || []} onAlertClick={(url) => window.open(url, '_blank')} />
+              <SeparatorBold />
+              <Hero temp={weather.current.temp} condition={weather.current.condition} summary={summary} />
+              <CurrentConditions feelsLike={weather.current.feelsLike} humidity={weather.current.humidity} wind={weather.current.wind} />
+              <Almanac sunrise={formatTime(weather.daily[0]?.sunrise)} sunset={formatTime(weather.daily[0]?.sunset)} moonrise="-" moonphase={moonphase} />
+              <ExtendedForecast days={weather.daily.slice(1, 8)} />
+              <Footer tagline={tagline} />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<CloudEdition />);
+  </script>
+</body>
+</html>
