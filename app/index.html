@@ -6,45 +6,42 @@
   <title>The Cloud Edition</title>
   <meta name="description" content="A Victorian newspaper-style weather forecast">
   <meta name="theme-color" content="#f5f1e8">
-  
+
   <!-- Favicon (optional - add your own) -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☁️</text></svg>">
-  
+
   <!-- Open Graph -->
   <meta property="og:title" content="The Cloud Edition">
   <meta property="og:description" content="A Victorian newspaper-style weather forecast">
   <meta property="og:type" content="website">
-  
+
   <style>
     /* ========================================================================
        FONT SETUP
-       Drop your ManufacturingConsent font files in assets/fonts/
        ======================================================================== */
     @font-face {
       font-family: 'ManufacturingConsent';
-      src: url('./assets/fonts/ManufacturingConsent-Regular.woff2') format('woff2'),
-           url('./assets/fonts/ManufacturingConsent-Regular.woff') format('woff'),
-           url('./assets/fonts/ManufacturingConsent-Regular.ttf') format('truetype');
+      src: url('./assets/fonts/ManufacturingConsent-Regular.ttf') format('truetype');
       font-weight: normal;
       font-style: normal;
       font-display: swap;
     }
-    
+
     /* ========================================================================
        CSS RESET & BASE
        ======================================================================== */
     *, *::before, *::after {
       box-sizing: border-box;
     }
-    
+
     * {
       margin: 0;
     }
-    
+
     html {
       -webkit-text-size-adjust: 100%;
     }
-    
+
     body {
       margin: 0;
       padding: 0;
@@ -53,21 +50,21 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
-    
+
     img, svg {
       display: block;
       max-width: 100%;
     }
-    
+
     button {
       font: inherit;
     }
-    
+
     #root {
       min-height: 100vh;
       min-height: 100dvh;
     }
-    
+
     /* Hide scrollbar but allow scrolling */
     .hide-scrollbar {
       -ms-overflow-style: none;
@@ -77,7 +74,7 @@
       display: none;
     }
   </style>
-  
+
   <!-- React -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -85,7 +82,7 @@
 </head>
 <body>
   <div id="root"></div>
-  
+
   <script type="text/babel" data-type="module">
 // ============================================================================
 // PROVIDER INTERFACES & IMPLEMENTATIONS
@@ -204,16 +201,16 @@ const DeterministicAIProvider = {
   async generateSummary(ctx) {
     const { condition, timeOfDay, hourlyPreview } = ctx;
     const c = condition.toLowerCase();
-    
+
     const greetings = {
       morning: ['The morning greets us with', 'Dawn brings', 'Early hours present'],
       afternoon: ['The afternoon continues with', 'Midday presents', 'The day progresses with'],
       evening: ['Evening descends with', 'The twilight hours bring', 'As dusk approaches,'],
       night: ['The night settles in with', 'Nocturnal hours present', 'The late hours bring'],
     };
-    
+
     const greeting = greetings[timeOfDay][Math.floor(Math.random() * 3)];
-    
+
     let desc = 'variable conditions';
     if (c.includes('clear') || c.includes('sunny')) desc = 'clear skies and fair conditions';
     else if (c.includes('cloud') && c.includes('part')) desc = 'a mix of sun and clouds';
@@ -222,12 +219,12 @@ const DeterministicAIProvider = {
     else if (c.includes('snow')) desc = 'wintry precipitation';
     else if (c.includes('thunder')) desc = 'stormy conditions';
     else if (c.includes('fog')) desc = 'misty, low-visibility conditions';
-    
+
     let preview = '';
     if (hourlyPreview?.willChange) {
       preview = ` Expect ${hourlyPreview.upcoming} later.`;
     }
-    
+
     return `${greeting} ${desc}.${preview}`;
   },
 
@@ -241,7 +238,7 @@ const DeterministicAIProvider = {
 const ClaudeAIProvider = {
   async generateSummary(ctx) {
     const { condition, temp, feelsLike, humidity, wind, high, low, timeOfDay, hourlyPreview } = ctx;
-    
+
     const prompt = `It's currently ${timeOfDay}. Current weather: ${temp}°C (feels like ${feelsLike}°C), ${condition.toLowerCase()}, humidity ${humidity}%, wind ${wind} km/h. Today's high ${high}°, low ${low}°. ${hourlyPreview?.summary || ''}
 
 Write a brief, friendly one-sentence weather summary appropriate for this time of day. Exclude the current & feels like temperatures, the humidity, and the wind. Use an upcoming preview if relevant.`;
@@ -344,7 +341,7 @@ function getMoonPhase(date) {
   const jd = c + e + day - 694039.09;
   const phase = jd / 29.53058867;
   const phaseIndex = Math.floor((phase - Math.floor(phase)) * 8);
-  
+
   const phases = [
     { name: 'New', icon: '🌑' }, { name: 'Waxing', icon: '🌒' },
     { name: 'Quarter', icon: '🌓' }, { name: 'Waxing', icon: '🌔' },
@@ -767,9 +764,8 @@ function CloudEdition() {
     '--text-color': '#1a1a1a',
     '--paper-color': '#f5f1e8',
     minHeight: '100vh',
-    /* Paper texture - uncomment when you add your image: */
-    /* backgroundImage: 'url(./assets/images/paper.png)', */
-    /* backgroundRepeat: 'repeat', */
+    backgroundImage: 'url(./assets/images/paper.png)',
+    backgroundRepeat: 'repeat',
     background: 'var(--paper-color)',
   };
 
